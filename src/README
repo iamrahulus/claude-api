@@ -1,0 +1,137 @@
+# Tool Use Hands-On Exercises — Working Log
+Companion to the checkpoint-based CCA-Foundations prep plan. Six exercises testing tool-use mechanics with the raw API (no framework, no Agent SDK yet).
+
+**Model in use:** `claude-haiku-4-5` — correct choice for these, no reasoning depth needed.
+**Cost so far:** all successful calls combined ≈ $0.002. Confirmed: failed 400/401 requests are not billed. Console's $0.01 display is a rounding floor, not real spend.
+
+---
+
+## Exercise 1 — Single tool, full loop ✅ DONE
+
+**Goal:** define one tool, watch the full request → `tool_use` → execute → `tool_result` → final answer loop.
+
+### Working schema
+```python
+get_stock_price_schema = {
+    "name": "get_stock_price",
+    "description": "Get the stock price for a given symbol. The tool will take stock ticker as input and return the stock price as a float.",
+    "input_schema": {              # NOT "parameters" — that's the OpenAI naming, not Anthropic's
+        "type": "object",
+        "properties": {
+            "symbol": {
+                "type": "string",
+                "description": "The stock symbol to look up."
+            }
+        },
+        "required": ["symbol"]     # was accidentally [] — always required if the tool can't function without it
+    }
+}
+```
+
+### Working two-call loop
+```python
+# Call 1 — Claude proposes a tool call
+response = client.messages.create(
+    model="claude-haiku-4-5",
+    max_tokens=1024,
+    thinking={"type": "disabled"},
+    tools=[get_stock_price_schema],
+    messages=[
+        {"role": "user", "content": "What's Apple's stock price with ticker symbol AAPL?"}
+    ]
+)
+# response.stop_reason == "tool_use"
+# response.content == [ToolUseBlock(id=..., name="get_stock_price", input={"symbol": "AAPL"}, caller=DirectCaller(...))]
+
+# Execute the dummy tool yourself — Claude never runs this, it only proposes the call
+result = get_stock_price("AAPL")  # e.g. "$295.97"
+
+# Call 2 — send the result back, get the synthesized answer
+messages = [
+    {"role": "user", "content": "What's Apple's stock price with ticker symbol AAPL?"},
+    {"role": "assistant", "content": response.content},   # pass the SDK content list verbatim, don't re-type it
+    {
+        "role": "user",                                    # tool_result is ALWAYS user role — see note below
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": response.content[0].id,     # must exactly match the ToolUseBlock's id
+                "content": result
+            }
+        ]
+    }
+]
+
+response2 = client.messages.create(
+    model="claude-haiku-4-5",
+    max_tokens=1024,
+    thinking={"type": "disabled"},
+    tools=[get_stock_price_schema],
+    messages=messages
+)
+# response2.stop_reason == "end_turn"
+# response2.content == [TextBlock(text="Apple's stock price (AAPL) is currently $295.97.")]
+```
+
+### Bugs hit & fixed (keep this list growing — this is the valuable part)
+| Bug | Symptom | Fix |
+|---|---|---|
+| Used `parameters` instead of `input_schema` | `400: tools.0.custom.input_schema: Field required` | Anthropic's tool schema key is `input_schema`, not OpenAI's `parameters` |
+| `"required": []` | Tool could theoretically be called with no `symbol` | Set `"required": ["symbol"]` — required list should reflect what the tool actually needs to function |
+| Printed one message list, sent a different (stale/temp) one | `400: tool_use ids were found without tool_result blocks immediately after` even though the printed dict looked correct | The bug wasn't the message structure — it was that a temp/copied variable was sent to `.create()` instead of the one that had the `tool_result` appended. **Lesson: always log the exact object right before the `.create()` call, not earlier in the flow — printed state and sent state can silently diverge.** |
+
+### Concepts locked in
+- **`stop_reason: tool_use`** → Claude is done reasoning for this turn and wants you to execute something. **`stop_reason: end_turn`** → final answer, loop exits.
+- **`caller: DirectCaller`** on a `ToolUseBlock` means the call came from the model reasoning about a tool you defined (as opposed to `ServerToolCaller`, used when one of Anthropic's own server-side tools — e.g. code execution — internally triggers a call). It does **not** mean the model executed the tool. Claude only ever *proposes*; your code executes.
+- **Role semantics**: `assistant` = content the model generated. `user` = everything external to the model, which includes both real human input *and* tool results — because a tool result is environment feedback, not something Claude said. Putting a `tool_result` in an `assistant` message would corrupt Claude's ability to distinguish its own claims from externally-verified facts in later turns (not just cause a generic "unexpected response").
+- **`tool_use_id` pairing**: every `tool_use` block must be followed, in the very next message, by a `tool_result` block referencing that exact id. Miss this and you get a 400, not a silent failure.
+- **400 vs 401 don't bill.** They fail before the model generates anything, so no tokens are consumed. If cost is high, look for successful-but-bloated calls or loop bugs, not failed requests.
+
+---
+
+## Exercise 2 — Force a routing failure, fix without a classifier ⏳ NEXT
+
+**Goal:** two tools with deliberately vague, near-identical descriptions (e.g. `get_customer(id)` / `get_account(id)`). Ask a question that should clearly route to one, watch Claude misroute or hesitate. Fix by rewriting descriptions only — no code changes.
+
+*Self-check:* why would bolting a router/classifier on top be the wrong fix here? (Exam pattern: root-cause fix over added infrastructure.)
+
+---
+
+## Exercise 3 — Multi-turn tool loop, more than one round trip
+
+**Goal:** tool A returns partial info (e.g. order IDs), tool B needs a result from A as input (e.g. order detail by ID). Build a real `while stop_reason == "tool_use"` loop — don't hardcode two rounds.
+
+*Watch for:* this is the exercise most likely to cause runaway token costs if the exit condition is wrong or message history isn't capped. Print `usage.input_tokens` every iteration. Add a hard `max_iterations` guard.
+
+*Self-check:* what's the loop's exit condition, and what's the guard if `end_turn` never arrives?
+
+---
+
+## Exercise 4 — Structured tool errors, not strings
+
+**Goal:** make a tool fail realistically (bad ID, timeout, empty result). First return a bare string error, observe Claude handle it badly. Then return `{errorCategory, isRetryable, attemptedInput}` and compare.
+
+**Uses one real, free API** (e.g. Open-Meteo, no key needed) — this is the one exercise where a real failure mode matters more than a scripted one.
+
+*Self-check:* what can a structured error tell an orchestrator that a bare string can't?
+
+---
+
+## Exercise 5 — Parallel tool calls in one turn
+
+**Goal:** 3 independent tools, one question needing all three. Confirm multiple `tool_use` blocks come back in a single response, and that all results are executed and sent back together, not one at a time.
+
+*Self-check:* what breaks if results are sent back one-by-one instead of batched?
+
+---
+
+## Exercise 6 — Force tool use with `tool_choice`
+
+**Goal:** repeat exercise 1 with `tool_choice: {"type": "tool", "name": "get_stock_price"}` on an unrelated question. Then compare `"any"` vs `"auto"` vs named-tool behavior.
+
+*Self-check:* when is forcing a specific tool the *correct* architectural choice, not a hack? (Think reversibility gates.)
+
+---
+
+## Fluency checkpoint
+Once all six are done: 3-minute no-notes explanation of Exercise 3 and Exercise 4 specifically — these are the two most likely to expose a gap under pressure (multi-turn state management, and structured failure handling).

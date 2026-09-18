@@ -1,0 +1,33 @@
+{
+  "mapping_version": "1.0.0",
+  "by_exception": {
+    "httpx.PoolTimeout": "internal_error",
+    "httpx.ConnectTimeout": "timeout",
+    "httpx.ReadTimeout": "timeout",
+    "httpx.WriteTimeout": "timeout",
+    "httpx.TimeoutException": "timeout",
+    "requests.exceptions.ConnectTimeout": "timeout",
+    "requests.exceptions.ReadTimeout": "timeout",
+    "requests.exceptions.Timeout": "timeout",
+    "requests.exceptions.ConnectionError": "network",
+    "requests.exceptions.TooManyRedirects": "internal_error",
+    "requests.exceptions.JSONDecodeError": "upstream_contract_violation",
+    "requests.exceptions.RequestException": "network",
+    "requests.exceptions.WriteTimeout": "timeout",
+    "httpx.ConnectError": "network",
+    "httpx.ReadError": "network",
+    "httpx.WriteError": "network",
+    "httpx.NetworkError": "network",
+    "httpx.RemoteProtocolError": "network",
+    "json.JSONDecodeError": "upstream_contract_violation",
+    "TypeError": "internal_error",
+    "ValueError": "internal_error"
+  },
+  "by_status": {
+    "400": "invalid_input", "404": "not_found", "422": "invalid_input",
+    "401": "authentication", "403": "authentication", "429": "rate_limit",
+    "500": "upstream_5xx", "502": "upstream_5xx",
+    "503": "upstream_5xx", "504": "upstream_5xx"
+  },
+  "status_ranges": [{"min": 500, "max": 599, "category": "upstream_5xx"}]
+}

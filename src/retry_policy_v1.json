@@ -1,0 +1,101 @@
+{
+    "policy_version": "1.2.0",
+    "description": "Retry policy for handling errors in API requests for get_weather (Open-Meteo). Keys MUST equal the errorCategory emitted by tool wrappers. max_retries = additional calls after the first (2 => up to 3 total). handling: orchestrator_retry | return_to_model | escalate.",
+    "error_classifications": {
+        "network": {
+            "description": "Errors related to network issues.",
+            "handling": "orchestrator_retry",
+            "max_retries": 2,
+            "backoff": {
+                "strategy": "exponential",
+                "base_ms": 1000,
+                "multiplier": 2,
+                "max_ms": 10000,
+                "jitter": "full"
+            }
+        },
+        "timeout": {
+            "description": "Errors related to request timeouts.",
+            "handling": "orchestrator_retry",
+            "max_retries": 2,
+            "backoff": {
+                "strategy": "exponential",
+                "base_ms": 1000,
+                "multiplier": 2,
+                "max_ms": 10000,
+                "jitter": "full"
+            }
+        },
+        "upstream_5xx": {
+            "description": "Errors related to upstream server failures (HTTP 5xx).",
+            "handling": "orchestrator_retry",
+            "max_retries": 2,
+            "backoff": {
+                "strategy": "exponential",
+                "base_ms": 1000,
+                "multiplier": 2,
+                "max_ms": 10000,
+                "jitter": "full"
+            }
+        },
+        "rate_limit": {
+            "description": "Errors related to rate limiting.",
+            "handling": "orchestrator_retry",
+            "max_retries": 2,
+            "backoff": {
+                "strategy": "fixed",
+                "base_ms": 5000,
+                "max_ms": 10000,
+                "honor_retry_after": true,
+                "jitter": "full",
+                "on_retry_after_exceed_max": "escalate"
+            }
+        },
+        "invalid_input": {
+            "description": "Errors related to invalid input or request parameters.",
+            "handling": "return_to_model",
+            "max_retries": 0
+        },
+        "not_found": {
+            "description": "Errors related to resources not found (HTTP 404).",
+            "handling": "return_to_model",
+            "max_retries": 0
+        },
+        "policy_violation": {
+            "description": "Errors related to policy violations.",
+            "handling": "return_to_model",
+            "max_retries": 0
+        },
+        "authentication": {
+            "description": "Errors related to authentication failures.",
+            "handling": "escalate",
+            "max_retries": 0
+        },
+        "internal_error": {
+            "description": "Defect in orchestrator or tool wrapper code. Not fixable by the model or by retrying — escalate for human investigation.",
+            "handling": "escalate",
+            "max_retries": 0
+        },
+        "upstream_contract_violation": {
+            "description": "Errors related to upstream contract violations.",
+            "handling": "escalate",
+            "max_retries": 0
+        }
+        
+    },
+    
+    "default_classification": {
+        "description": "Default classification for unrecognized errors.",
+        "handling": "orchestrator_retry",
+        "max_retries": 1,
+        "backoff": {
+            "strategy": "fixed",
+            "base_ms": 1000,
+            "jitter": "full"
+        }
+    },
+
+    "global_limits": {
+        "max_total_retries_per_correlation": 10
+    }
+}

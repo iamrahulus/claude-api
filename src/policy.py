@@ -4,4 +4,5 @@ POLICY = {
          "condition": lambda result: result.get("acc_type") == "business"}
     ],
     "get_customer": [],  # no prerequisites
+    "get_weather": []  # no prerequisites
 }

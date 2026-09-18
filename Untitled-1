@@ -1,0 +1,436 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "962296ec",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import sys\n",
+    "from typing import List, Optional\n",
+    "from anthropic import Anthropic\n",
+    "from dotenv import load_dotenv\n",
+    "\n",
+    "load_dotenv()\n",
+    "client = Anthropic()\n",
+    "model = \"claude-haiku-4-5-20251001\"  # default model\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 66,
+   "id": "5baa8265",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get_stock_price(symbol: str) -> Optional[float]:\n",
+    "    \"\"\"\n",
+    "    Get the stock price for a given symbol using the Alpha Vantage API.\n",
+    "\n",
+    "    Args:\n",
+    "        symbol (str): The stock symbol to look up.\n",
+    "\n",
+    "    Returns:\n",
+    "        Optional[float]: The stock price, or None if not found.\n",
+    "    \"\"\"\n",
+    "    # Implementation for fetching stock price would go here\n",
+    "    # Return a random float between 100 and 500 for demonstration purposes\n",
+    "    import random\n",
+    "    return round(random.uniform(100, 500), 2)\n",
+    "\n",
+    "    def get_customer(id): \n",
+    "        # Implementation for fetching customer information would go here\n",
+    "        return {\n",
+    "            \"id\": id,\n",
+    "            \"name\": \"John Doe\",\n",
+    "            \"email\": \"john.doe@example.com\"\n",
+    "        }\n",
+    "\n",
+    "\n",
+    "    def get_account(id): \n",
+    "        return {\n",
+    "            \"id\": id,\n",
+    "            \"balance\": 1000.0,\n",
+    "            \"currency\": \"USD\"\n",
+    "        }"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 68,
+   "id": "f709a197",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Write a tool schema for the get_stock_price function\n",
+    "get_stock_price_schema = {\n",
+    "    \"name\": \"get_stock_price\",\n",
+    "    \"description\": \"Get the stock price for a given symbol. The tool will take stock ticker as input and return the stock price as a float.\",\n",
+    "    \"input_schema\": {\n",
+    "        \"type\": \"object\",\n",
+    "        \"properties\": {\n",
+    "            \"symbol\": {\n",
+    "                \"type\": \"string\",\n",
+    "                \"description\": \"The stock symbol to look up.\"\n",
+    "            }\n",
+    "        },\n",
+    "        \"required\": []\n",
+    "    }\n",
+    "}\n",
+    "\n",
+    "get_customer_schema = {\n",
+    "    \"name\": \"get_customer\",\n",
+    "    \"description\": \"Get information for a given ID. The tool will take ID as input and return information as a JSON object.\",\n",
+    "    \"input_schema\": {\n",
+    "        \"type\": \"object\",\n",
+    "        \"properties\": {\n",
+    "            \"id\": {\n",
+    "                \"type\": \"string\",\n",
+    "                \"description\": \"The ID to look up.\"\n",
+    "            }\n",
+    "        },\n",
+    "        \"required\": []\n",
+    "    }\n",
+    "}\n",
+    "\n",
+    "get_account_schema = {\n",
+    "    \"name\": \"get_account\", \n",
+    "    \"description\": \"Get information for a given ID. The tool will take ID as input and return information as a JSON object.\",\n",
+    "    \"input_schema\": {\n",
+    "        \"type\": \"object\",\n",
+    "        \"properties\": {\n",
+    "            \"id\": {\n",
+    "                \"type\": \"string\",\n",
+    "                \"description\": \"The ID to look up.\"\n",
+    "            }\n",
+    "        },\n",
+    "        \"required\": []\n",
+    "    }\n",
+    "}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "id": "a70fe5b8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from anthropic.types import Message\n",
+    "\n",
+    "def add_user_message(messages: List[dict], content) -> None:\n",
+    "    \"\"\"\n",
+    "    Add a user message to the messages list.\n",
+    "\n",
+    "    Args:\n",
+    "        messages (List[dict]): The list of messages.\n",
+    "        content (str): The content of the user message.\n",
+    "    \"\"\"\n",
+    "    if isinstance(content, Message):\n",
+    "        messages.append({\"role\": \"user\", \"content\": content.content})\n",
+    "    else:\n",
+    "        messages.append({\"role\": \"user\", \"content\": content})\n",
+    "\n",
+    "def add_assistant_message(messages: List[dict], content) -> None:\n",
+    "    \"\"\"\n",
+    "    Add an assistant message to the messages list.\n",
+    "\n",
+    "    Args:\n",
+    "        messages (List[dict]): The list of messages.\n",
+    "        content (str): The content of the assistant message.\n",
+    "    \"\"\"\n",
+    "    if isinstance(content, Message):\n",
+    "        messages.append({\"role\": \"assistant\", \"content\": content.content})\n",
+    "    else:\n",
+    "        messages.append({\"role\": \"assistant\", \"content\": content})\n",
+    "\n",
+    "def converse(\n",
+    "    messages: List[dict],\n",
+    "    model: str = model,\n",
+    "    max_tokens_to_sample: int = 300,\n",
+    "    temperature: float = 0.7,\n",
+    "    stop_sequences: Optional[List[str]] = None,\n",
+    "    tools: Optional[List[dict]] = None,\n",
+    "    system_prompt: Optional[str] = None\n",
+    ") -> str:\n",
+    "    \"\"\"\n",
+    "    Converse with the Claude model.\n",
+    "\n",
+    "    Args:\n",
+    "        messages (List[dict]): A list of message dictionaries.\n",
+    "        model (str): The model to use for the conversation.\n",
+    "        max_tokens_to_sample (int): The maximum number of tokens to sample.\n",
+    "        temperature (float): The sampling temperature.\n",
+    "        stop_sequences (Optional[List[str]]): A list of stop sequences.\n",
+    "        tools (Optional[List[dict]]): A list of tools available for the model.\n",
+    "        system_prompt (Optional[str]): A system prompt to include in the conversation.\n",
+    "\n",
+    "    Returns:\n",
+    "        str: The response from the Claude model.\n",
+    "    \"\"\"\n",
+    "    arg_list = {\n",
+    "        # get model from environment variable if set, otherwise use the default model\n",
+    "        \"model\": model,\n",
+    "        \"messages\": messages,\n",
+    "        \"max_tokens\": 1024,\n",
+    "        \"temperature\": 0.5,\n",
+    "        \"thinking\": {\"type\": \"disabled\"},\n",
+    "    }\n",
+    "\n",
+    "    if stop_sequences is not None:\n",
+    "        arg_list[\"stop_sequences\"] = stop_sequences\n",
+    "    if tools is not None:\n",
+    "        arg_list[\"tools\"] = tools\n",
+    "    if system_prompt is not None:\n",
+    "        arg_list[\"system\"] = system_prompt\n",
+    "    \n",
+    "    print(arg_list)\n",
+    "\n",
+    "    response = client.messages.create(**arg_list)\n",
+    "        \n",
+    "    return response"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 70,
+   "id": "480ad23d",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'model': 'claude-haiku-4-5', 'messages': [{'role': 'user', 'content': 'Find the details of customer based on the ID 12345.'}], 'max_tokens': 1024, 'temperature': 0.5, 'thinking': {'type': 'disabled'}, 'tools': [{'name': 'get_stock_price', 'description': 'Get the stock price for a given symbol. The tool will take stock ticker as input and return the stock price as a float.', 'input_schema': {'type': 'object', 'properties': {'symbol': {'type': 'string', 'description': 'The stock symbol to look up.'}}, 'required': []}}, {'name': 'get_customer', 'description': 'Get information for a given ID. The tool will take ID as input and return information as a JSON object.', 'input_schema': {'type': 'object', 'properties': {'id': {'type': 'string', 'description': 'The ID to look up.'}}, 'required': []}}, {'name': 'get_account', 'description': 'Get information for a given ID. The tool will take ID as input and return information as a JSON object.', 'input_schema': {'type': 'object', 'properties': {'id': {'type': 'string', 'description': 'The ID to look up.'}}, 'required': []}}]}\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "Message(id='msg_011Ce5WSUQkuWHRJBHWmSYSW', container=None, content=[ToolUseBlock(id='toolu_01MsxX3r4JSX9LNhFL4NED7i', caller=DirectCaller(type='direct'), input={'id': '12345'}, name='get_customer', type='tool_use')], model='claude-haiku-4-5-20251001', role='assistant', stop_details=None, stop_reason='tool_use', stop_sequence=None, type='message', usage=Usage(cache_creation=CacheCreation(ephemeral_1h_input_tokens=0, ephemeral_5m_input_tokens=0), cache_creation_input_tokens=0, cache_read_input_tokens=0, inference_geo='not_available', input_tokens=754, output_tokens=55, output_tokens_details=None, server_tool_use=None, service_tier='standard'))"
+      ]
+     },
+     "execution_count": 70,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "messages = []\n",
+    "add_user_message(messages, \"Find the details of customer based on the ID 12345.\")\n",
+    "response = converse(messages, tools=[get_stock_price_schema, get_customer_schema, get_account_schema])\n",
+    "resp_temp = response\n",
+    "response"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "id": "9ea949fc",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "{'message_id': 'msg_011Ce5DK8NpfRs27ZMFLgsr8',\n",
+       " 'stop_reason': 'tool_use',\n",
+       " 'contents': [{'tool_id': 'toolu_016uLybcWc5XpFiKWFWddXBZ',\n",
+       "   'input': {'symbol': 'AAPL'},\n",
+       "   'tool_name': 'get_stock_price'}]}"
+      ]
+     },
+     "execution_count": 55,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "def response_parser(response):\n",
+    "    \"\"\"\n",
+    "    Parse the response from the Claude model.\n",
+    "\n",
+    "    Args:\n",
+    "        response: The response object from the Claude model.\n",
+    "\n",
+    "    Returns:\n",
+    "        The parsed response.\n",
+    "    \"\"\"\n",
+    "    claude_response = {}\n",
+    "    if response is None:\n",
+    "        return None\n",
+    "    if isinstance(response, Message):\n",
+    "        claude_response[\"message_id\"] = response.id\n",
+    "        claude_response[\"stop_reason\"] = response.stop_reason\n",
+    "        if response.container is not None:\n",
+    "            claude_response[\"container\"] = response.container\n",
+    "        if response.content is not None:\n",
+    "            contents = response.content\n",
+    "            claude_response[\"contents\"] = []\n",
+    "            for content in contents:\n",
+    "                if content.type == \"output_text\":\n",
+    "                    claude_response[\"contents\"].append({\"completion\": content.text})\n",
+    "                elif content.type == \"tool_use\":\n",
+    "                    claude_response[\"contents\"].append({\"tool_id\": content.id, \"input\": content.input, \"tool_name\": content.name})\n",
+    "                    \n",
+    "    return claude_response\n",
+    "\n",
+    "response_parsed = response_parser(response)\n",
+    "response_parsed"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 62,
+   "id": "5942d26c",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[{'role': 'user',\n",
+       "  'content': \"What's Apple's stock price with ticker symbol AAPL?\"},\n",
+       " {'role': 'assistant',\n",
+       "  'content': [ToolUseBlock(id='toolu_016uLybcWc5XpFiKWFWddXBZ', caller=DirectCaller(type='direct'), input={'symbol': 'AAPL'}, name='get_stock_price', type='tool_use')]}]"
+      ]
+     },
+     "execution_count": 62,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "messages = [{'role': 'user', 'content': \"What's Apple's stock price with ticker symbol AAPL?\"}]\n",
+    "\n",
+    "add_assistant_message(messages, response.content)\n",
+    "# messages\n",
+    "messages_temp = messages.copy()\n",
+    "messages_temp"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "270463f0",
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "NameError",
+     "evalue": "name 'ToolUseBlock' is not defined",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[31m---------------------------------------------------------------------------\u001b[39m",
+      "\u001b[31mNameError\u001b[39m                                 Traceback (most recent call last)",
+      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[59]\u001b[39m\u001b[32m, line 4\u001b[39m\n\u001b[32m      1\u001b[39m messages = [{'role': 'user',\n\u001b[32m      2\u001b[39m   \u001b[33m'content'\u001b[39m: \u001b[33m\"What's Apple's stock price with ticker symbol AAPL?\"\u001b[39m},\n\u001b[32m      3\u001b[39m  {'role': 'assistant',\n\u001b[32m----> \u001b[39m\u001b[32m4\u001b[39m   \u001b[33m'content'\u001b[39m: [ToolUseBlock(id=\u001b[33m'toolu_016uLybcWc5XpFiKWFWddXBZ'\u001b[39m, caller=DirectCaller(type=\u001b[33m'direct'\u001b[39m), input={\u001b[33m'symbol'\u001b[39m: \u001b[33m'AAPL'\u001b[39m}, name=\u001b[33m'get_stock_price'\u001b[39m, type=\u001b[33m'tool_use'\u001b[39m)]}]\n",
+      "\u001b[31mNameError\u001b[39m: name 'ToolUseBlock' is not defined"
+     ]
+    }
+   ],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 63,
+   "id": "820602ca",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[{'role': 'user',\n",
+       "  'content': \"What's Apple's stock price with ticker symbol AAPL?\"},\n",
+       " {'role': 'assistant',\n",
+       "  'content': [ToolUseBlock(id='toolu_016uLybcWc5XpFiKWFWddXBZ', caller=DirectCaller(type='direct'), input={'symbol': 'AAPL'}, name='get_stock_price', type='tool_use')]},\n",
+       " {'role': 'user',\n",
+       "  'content': [{'type': 'tool_result',\n",
+       "    'tool_use_id': 'toolu_016uLybcWc5XpFiKWFWddXBZ',\n",
+       "    'content': '$295.97'}]}]"
+      ]
+     },
+     "execution_count": 63,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "def execute_tools(tool_name: str, tool_input: dict) -> str:\n",
+    "    \"\"\"\n",
+    "    Execute a tool based on the tool name and input.\n",
+    "\n",
+    "    Args:\n",
+    "        tool_name (str): The name of the tool to execute.\n",
+    "        tool_input (dict): The input parameters for the tool.\n",
+    "\n",
+    "    Returns:\n",
+    "        dict: The result of the tool execution.\n",
+    "    \"\"\"\n",
+    "    if tool_name == \"get_stock_price\":\n",
+    "        symbol = tool_input.get(\"symbol\")\n",
+    "        if symbol:\n",
+    "            price = get_stock_price(symbol)\n",
+    "            return f\"${price}\" \n",
+    "        else:\n",
+    "            return \"Symbol not provided\"\n",
+    "    else:\n",
+    "        return f\"Tool '{tool_name}' not recognized\"\n",
+    "\n",
+    "user_message_content = []\n",
+    "user_message_content.append({\"type\": \"tool_result\", \"tool_use_id\": response_parsed[\"contents\"][0][\"tool_id\"], \n",
+    "\"content\": execute_tools(response_parsed[\"contents\"][0][\"tool_name\"], response_parsed[\"contents\"][0][\"input\"])})\n",
+    "add_user_message(messages_temp, user_message_content)\n",
+    "messages_temp"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 65,
+   "id": "3d2304cc",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "Message(id='msg_011Ce5ER55fQFFRViLaEdeER', container=None, content=[TextBlock(citations=None, text=\"Apple's stock price (AAPL) is currently **$295.97**.\", type='text')], model='claude-haiku-4-5-20251001', role='assistant', stop_details=None, stop_reason='end_turn', stop_sequence=None, type='message', usage=Usage(cache_creation=CacheCreation(ephemeral_1h_input_tokens=0, ephemeral_5m_input_tokens=0), cache_creation_input_tokens=0, cache_read_input_tokens=0, inference_geo='not_available', input_tokens=676, output_tokens=21, output_tokens_details=None, server_tool_use=None, service_tier='standard'))"
+      ]
+     },
+     "execution_count": 65,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "response2 = client.messages.create(\n",
+    "    model=\"claude-haiku-4-5\",\n",
+    "    max_tokens=1024,\n",
+    "    thinking={\"type\": \"disabled\"},\n",
+    "    tools=[get_stock_price_schema],\n",
+    "    messages=messages_temp\n",
+    ")\n",
+    "\n",
+    "response2 "
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": ".venv",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
